@@ -5,7 +5,7 @@ from getpass import getpass
 import click
 import yaml
 from paramiko import SSHClient
-from typing import Dict
+from datetime import date
 
 class CmdResult:
     def __init__(self, stdout: str, stderr: str, exit_code: int):
@@ -33,7 +33,9 @@ def apt_package_management(package_name, desired_state, ssh_client):
         return
 
     result = run_remote_cmd(command, ssh_client)
-    print(f"{action} package {package_name} - Exit code: {result.exit_code}")
+    hostname = ssh_client.get_transport().getpeername()[0]
+    print(f"{date} - [1] host={hostname} op=apt name={package_name} state={desired_state}")
+    print(f"{date} -[1] host={hostname} op=apt status={'OK' if result.exit_code == 0 else 'CHANGED'}")
     print(f"stdout:\n{result.stdout}")
     print(f"stderr:\n{result.stderr}")
 
@@ -54,7 +56,9 @@ def service_management(service_name, desired_state, ssh_client):
         return
 
     result = run_remote_cmd(command, ssh_client)
-    print(f"{action} service {service_name} - Exit code: {result.exit_code}")
+    hostname = ssh_client.get_transport().getpeername()[0]
+    print(f"{date} -[2] host={hostname} op=service name={service_name} state={desired_state}")
+    print(f"{date} -[2] host={hostname} op=service status={'OK' if result.exit_code == 0 else 'CHANGED'}")
     print(f"stdout:\n{result.stdout}")
     print(f"stderr:\n{result.stderr}")
 
@@ -80,6 +84,15 @@ def execute_playbook(playbook_file, inventory_file):
     with open(inventory_file, 'r') as file:
         inventory = yaml.safe_load(file)
 
+    logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    logger = logging.getLogger(__name__)
+
+    # Collecter les informations sur les tâches et les hôtes
+    tasks_count = sum(len(playbook_task.get('tasks', [])) for playbook_task in playbook)
+    hosts = [host['hostname'] for host in inventory['hosts']]
+
+    logger.info(f"processing {tasks_count} tasks on hosts: {', '.join(hosts)}")
+
     # Parcourir les playbooks dans le fichier de playbook
     for playbook_task in playbook:
         name = playbook_task.get('name')
@@ -93,9 +106,9 @@ def execute_playbook(playbook_file, inventory_file):
 
             # Se connecter à l'hôte distant
             ssh_client = connect_to_host(hostname, username)
-            print(f"Connexion réussie à l'hôte : {hostname}")
+            logger.info(f"Connexion réussie à l'hôte : {hostname}")
             stdin, stdout, stderr = ssh_client.exec_command('hostname')
-            print(stdout.read().decode())
+            logger.info(stdout.read().decode())
             time.sleep(.5)
 
             # Vérifier si des tâches sont définies
@@ -120,11 +133,12 @@ def execute_playbook(playbook_file, inventory_file):
             # Fermer la connexion SSH
             ssh_client.close()
 
+    logger.info(f"done processing tasks for hosts: {', '.join(hosts)}")
+
 
 @click.command()
 @click.option('-f', '--playbook', required=True, help='Chemin vers le fichier de playbook')
 @click.option('-i', '--inventory', required=True, help='Chemin vers le fichier d\'inventaire')
-
 def main(playbook, inventory):
     execute_playbook(playbook, inventory)
 
