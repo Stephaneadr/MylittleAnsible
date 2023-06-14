@@ -6,6 +6,14 @@ import click
 import jinja2
 import yaml
 import subprocess
+from paramiko import SSHClient
+from typing import Dict
+
+class CmdResult:
+    def __init__(self, stdout: str, stderr: str, exit_code: int):
+        self.stdout = stdout
+        self.stderr = stderr
+        self.exit_code = exit_code
 
 
 def connect_to_host(hostname, username):
@@ -15,46 +23,54 @@ def connect_to_host(hostname, username):
     return client
 
 
-def apt_package_management(package_name, desired_state):
+def apt_package_management(package_name, desired_state, ssh_client):
     if desired_state == 'present':
-        command = ['sudo','apt', 'install', '-y', package_name]
+        command = f'sudo apt-get install -y {package_name}'
         action = 'Install'
     elif desired_state == 'absent':
-        command = ['sudo','apt', 'remove', '-y', package_name]
+        command = f'sudo apt-get remove -y {package_name}'
         action = 'Remove'
     else:
         print("Invalid desired_state value")
         return
 
-    try:
-        subprocess.check_call(command)
-        print(f"{action} package {package_name} successful")
-    except subprocess.CalledProcessError:
-        print(f"{action} package {package_name} failed")
+    result = run_remote_cmd(command, ssh_client)
+    print(f"{action} package {package_name} - Exit code: {result.exit_code}")
+    print(f"stdout:\n{result.stdout}")
+    print(f"stderr:\n{result.stderr}")
 
 
-def service_management(service_name, desired_state):
+def service_management(service_name, desired_state, ssh_client):
     if desired_state in ['start', 'restart', 'stop']:
-        command = ['sudo','systemctl', desired_state, service_name]
+        command = f'sudo systemctl {desired_state} {service_name}'
         action = 'Manage'
     elif desired_state in ['enabled', 'disabled']:
         if desired_state == 'enabled':
-            command = ['sudo','systemctl', 'enable', service_name]
+            command = f'sudo systemctl enable {service_name}'
             action = 'Enable'
         else:
-            command = ['sudo','systemctl', 'disable', service_name]
+            command = f'sudo systemctl disable {service_name}'
             action = 'Disable'
     else:
         print("Invalid desired_state value")
         return
 
+    result = run_remote_cmd(command, ssh_client)
+    print(f"{action} service {service_name} - Exit code: {result.exit_code}")
+    print(f"stdout:\n{result.stdout}")
+    print(f"stderr:\n{result.stderr}")
+
+
+def run_remote_cmd(command: str, ssh_client: SSHClient) -> CmdResult:
+    result = CmdResult("", "", -1)
     try:
-        subprocess.check_call(command)
-        print(f"{action} service {service_name} successful")
-    except subprocess.CalledProcessError:
-        print(f"{action} service {service_name} failed")
-
-
+        _, stdout, stderr = ssh_client.exec_command(command)
+        result.stdout = stdout.read().decode('utf-8')
+        result.stderr = stderr.read().decode('utf-8')
+        result.exit_code = stdout.channel.recv_exit_status()
+    except Exception as e:
+        result.stderr = str(e)
+    return result
 
 
 def execute_playbook(playbook_file, inventory_file):
@@ -78,9 +94,9 @@ def execute_playbook(playbook_file, inventory_file):
             username = host['username']
 
             # Se connecter à l'hôte distant
-            client = connect_to_host(hostname, username)
+            ssh_client = connect_to_host(hostname, username)
             print(f"Connexion réussie à l'hôte : {hostname}")
-            stdin, stdout, stderr = client.exec_command("hostname")
+            stdin, stdout, stderr = ssh_client.exec_command('hostname')
             print(stdout.read().decode())
             time.sleep(.5)
 
@@ -91,21 +107,20 @@ def execute_playbook(playbook_file, inventory_file):
                     module_name = next(iter(task.keys()))  # Récupérer le nom du module
                     module_args = task.get(module_name)
 
-
                     # Exécuter l'action correspondante en fonction du module
                     if module_name == 'apt_package':
                         package_name = module_args.get('name')
                         desired_state = module_args.get('state')
-                        apt_package_management(package_name, desired_state)
+                        apt_package_management(package_name, desired_state, ssh_client)
                     elif module_name == 'service_status':
                         service_name = module_args.get('name')
                         desired_state = module_args.get('state')
-                        service_management(service_name, desired_state)
+                        service_management(service_name, desired_state, ssh_client)
                     else:
                         print(f"Module '{module_name}' non pris en charge")
 
-    # Fermer la connexion SSH
-    client.close()
+            # Fermer la connexion SSH
+            ssh_client.close()
 
 
 @click.command()

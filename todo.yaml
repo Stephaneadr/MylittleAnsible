@@ -2,8 +2,8 @@
   hosts: all
   tasks:
     - apt_package:
-        name: nginx
-        state: "absent"  # Remplacez par "absent" pour désinstaller le paquet
+        name: apache2
+        state: "present"  # Remplacez par "absent" pour désinstaller le paquet
       register: result
     - debug:
         var: result
@@ -13,7 +13,7 @@
   tasks:
     - service_status:
         name: apache2
-        state: "stop"  # Remplacez par l'état souhaité (started, restarted, stopped, enabled, disabled)
+        state: "start"  # Remplacez par l'état souhaité (started, restarted, stopped, enabled, disabled)
       register: result
     - debug:
         var: result
