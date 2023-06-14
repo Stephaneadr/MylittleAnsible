@@ -18,3 +18,10 @@
     - debug:
         var: result
 
+
+- name: Copy
+  hosts: all
+  params:
+    src: "./public"
+    dest: "/var/www/website"
+    backup: true
