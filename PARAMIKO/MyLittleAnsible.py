@@ -7,6 +7,9 @@ import yaml
 from paramiko import SSHClient
 from typing import Dict
 
+source_dir = '/chemin/du/dossier/source'
+destination_dir = '/chemin/du/dossier/destination'
+
 class CmdResult:
     def __init__(self, stdout: str, stderr: str, exit_code: int):
         self.stdout = stdout
@@ -19,6 +22,14 @@ def connect_to_host(hostname, username):
     client.load_system_host_keys()
     client.connect(hostname, username=username)
     return client
+
+def copy(hostname, username, source_dir, destination_dir):
+    client = connect_to_host(hostname, username)
+
+    scp = client.open_sft()
+    scp.put(source_dir, destination_dir, recursive=True)
+    scp.close()
+    client.close()
 
 
 def apt_package_management(package_name, desired_state, ssh_client):
@@ -69,6 +80,8 @@ def run_remote_cmd(command: str, ssh_client: SSHClient) -> CmdResult:
     except Exception as e:
         result.stderr = str(e)
     return result
+
+
 
 
 def execute_playbook(playbook_file, inventory_file):
