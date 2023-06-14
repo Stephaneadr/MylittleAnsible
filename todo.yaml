@@ -1,23 +1,20 @@
 - name: APT
-  hosts: votre_hote
+  hosts: all
   tasks:
-    - name: Installer ou désinstaller un paquet APT
-      apt_package:
-        name: apache2
-        state: "present"  # Remplacez par "absent" pour désinstaller le paquet
+    - apt_package:
+        name: nginx
+        state: "absent"  # Remplacez par "absent" pour désinstaller le paquet
       register: result
-    - name: Afficher le résultat
-      debug:
+    - debug:
         var: result
 
 - name: Service
   hosts: all
   tasks:
-    - name: Gérer le service
-      service_status:
+    - service_status:
         name: apache2
-        state: "started"  # Remplacez par l'état souhaité (started, restarted, stopped, enabled, disabled)
+        state: "stop"  # Remplacez par l'état souhaité (started, restarted, stopped, enabled, disabled)
       register: result
-    - name: Afficher le résultat
-      debug:
+    - debug:
         var: result
+

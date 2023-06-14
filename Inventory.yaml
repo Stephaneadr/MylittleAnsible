@@ -1,7 +1,7 @@
-hosts :
-    Worker:
-        ssh_address : 192.168.1.21
-        ssh_port : 22
-    Worker2:
-        ssh_address : 192.168.1.26
-        ssh_port : 22
+hosts:
+  - name: Worker
+    hostname: 192.168.1.21
+    username: stef
+  - name: Worker2
+    hostname: 192.168.1.26
+    username: stef

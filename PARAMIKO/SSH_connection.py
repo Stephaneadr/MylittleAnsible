@@ -1,12 +1,9 @@
 import time
 from getpass import getpass
-import click
-import jinja2
-import yaml
 import paramiko
 
 
-hostname = "192.168.1.21"
+hostname = "192.168.1.26"
 username = "stef"
 
 
