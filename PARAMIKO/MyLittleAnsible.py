@@ -78,14 +78,13 @@ def run_remote_cmd(command: str, ssh_client: SSHClient) -> CmdResult:
         result.stderr = str(e)
     return result
 
-def render(source, destianation):
-    with open('config.yaml', 'r') as f:
-        config = yaml.safe_load(f)
-    template_params = config['module']['params']
+def render(playbook):
+
+    template_params = playbook['module']['params']
     src_template = template_params['src']
     dest_file = template_params['dest']
     variables = template_params.get('vars', {})
-    env = Environment(loader=FileSystemLoader('/chemin/vers/le/dossier/du/template'))
+    env = Environment(loader=FileSystemLoader(src_template))
     template = env.get_template(src_template)
     resultat = template.render(variables)
     with open(dest_file, 'w') as f:
