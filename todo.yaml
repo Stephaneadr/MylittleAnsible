@@ -19,3 +19,18 @@
       src: "./test"
       dest: "./rep/"
       backup: true
+
+- name: Sysctl
+  hosts: all
+  tasks:
+  - sysctl:
+    attribute: "net.ipv4.ip_forward"
+    value: 1
+
+module: template
+params:
+  src: "default.conf.j2"
+  dest: "/etc/nginx/sites-enabled/default"
+  vars:
+    listen_port: 8000
+    servername: ""

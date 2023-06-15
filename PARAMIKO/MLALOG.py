@@ -4,6 +4,7 @@ from getpass import getpass
 import click
 import yaml
 from paramiko import SSHClient
+from jinja2 import Environment, FileSystemLoader
 
 class CmdResult:
     def __init__(self, stdout: str, stderr: str, exit_code: int):
@@ -27,9 +28,20 @@ def sysctl_module(attribute, value, permanent, ssh_client):
  """
 
 def copy_module(src, dest, backup, ssh_client):
-    command = f'sudo cp -r {"--backup" if backup else ""} {src} {dest}'
+    command = f'sudo cp -r {"--backup=numbered" if backup else ""} {src} {dest}'
     run_remote_cmd(command, ssh_client)
 
+def render(playbook):
+    template_params = playbook['module']['params']
+    src_template = template_params['src']
+    dest_file = template_params['dest']
+    variables = template_params.get('vars', {})
+    env = Environment(loader=FileSystemLoader(src_template))
+    template = env.get_template(src_template)
+    resultat = template.render(variables)
+    with open(dest_file, 'w') as f:
+        f.write(resultat)
+    print("Le rendu du template a été écrit dans le fichier de destination.")
 
 def apt_package_management(package_name, desired_state, ssh_client):
     if desired_state == 'present':
@@ -159,6 +171,8 @@ def execute_playbook(playbook_file, inventory_file):
                         permanent = module_args.get('permanent', False)
                         sysctl_module(attribute, value, permanent, ssh_client)
                         logging.info(f"[4] host={hostname} op=sysctl attribute={attribute} value={value} permanent={permanent}")
+
+                    
                     else:
                         pass
 
