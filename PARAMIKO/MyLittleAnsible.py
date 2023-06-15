@@ -6,6 +6,7 @@ import click
 import yaml
 from paramiko import SSHClient
 from typing import Dict
+from jinja2 import Environment, FileSystemLoader
 
 class CmdResult:
     def __init__(self, stdout: str, stderr: str, exit_code: int):
@@ -77,8 +78,19 @@ def run_remote_cmd(command: str, ssh_client: SSHClient) -> CmdResult:
         result.stderr = str(e)
     return result
 
-
-
+def render(source, destianation):
+    with open('config.yaml', 'r') as f:
+        config = yaml.safe_load(f)
+    template_params = config['module']['params']
+    src_template = template_params['src']
+    dest_file = template_params['dest']
+    variables = template_params.get('vars', {})
+    env = Environment(loader=FileSystemLoader('/chemin/vers/le/dossier/du/template'))
+    template = env.get_template(src_template)
+    resultat = template.render(variables)
+    with open(dest_file, 'w') as f:
+        f.write(resultat)
+    print("Le rendu du template a été écrit dans le fichier de destination.")
 
 def execute_playbook(playbook_file, inventory_file):
     # Charger le fichier de playbook YAML

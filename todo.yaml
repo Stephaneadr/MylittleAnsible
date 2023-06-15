@@ -19,11 +19,3 @@
       src: "./test"
       dest: "./rep/"
       backup: true
-
-- module: sysctl
-  hosts: all
-  tasks:
-  - sysctl_module:
-      attribute: "net.core.somaxconn"
-      value: 8192
-      permanent: true
