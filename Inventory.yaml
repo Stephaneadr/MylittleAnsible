@@ -1,7 +1,7 @@
 hosts:
   - name: Worker
-    hostname: 192.168.80.129
-    username: elmo
-#  - name: Worker2
-#    hostname: 192.168.1.26
-#    username: stef
+    hostname: 192.168.1.21
+    username: stef
+  - name: Worker2
+    hostname: 192.168.1.26
+    username: stef

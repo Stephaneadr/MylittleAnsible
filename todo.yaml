@@ -4,9 +4,6 @@
     - apt_package:
         name: apache2
         state: "present"  # Remplacez par "absent" pour désinstaller le paquet
-      register: result
-    - debug:
-        var: result
 
 - name: Service
   hosts: all
@@ -14,14 +11,11 @@
     - service_status:
         name: apache2
         state: "start"  # Remplacez par l'état souhaité (started, restarted, stopped, enabled, disabled)
-      register: result
-    - debug:
-        var: result
-
 
 - name: Copy
   hosts: all
-  params:
-    src: "./public"
-    dest: "/var/www/website"
-    backup: true
+  tasks:
+  - copy:
+      src: "./test"
+      dest: "./rep/"
+      backup: true

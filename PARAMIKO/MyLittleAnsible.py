@@ -7,9 +7,6 @@ import yaml
 from paramiko import SSHClient
 from typing import Dict
 
-source_dir = '/chemin/du/dossier/source'
-destination_dir = '/chemin/du/dossier/destination'
-
 class CmdResult:
     def __init__(self, stdout: str, stderr: str, exit_code: int):
         self.stdout = stdout
@@ -23,9 +20,8 @@ def connect_to_host(hostname, username):
     client.connect(hostname, username=username)
     return client
 
-def copy(hostname, username, source_dir, destination_dir):
+def copy(source_dir, destination_dir, ssh_client):
     client = connect_to_host(hostname, username)
-
     scp = client.open_sft()
     scp.put(source_dir, destination_dir, recursive=True)
     scp.close()
