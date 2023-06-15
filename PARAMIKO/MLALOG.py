@@ -18,6 +18,14 @@ class CmdResult:
     client.connect(hostname, username=username)
     return client """
 
+def sysctl_module(attribute, value, permanent, ssh_client):
+    command = f'sudo sysctl -w {"--permanent" if permanent else ""} {attribute}={value}'
+    run_remote_cmd(command, ssh_client)
+    """ hostname = ssh_client.get_transport().getpeername()[0]
+    print(f"[4] host={hostname} op=sysctl attribute={attribute} value={value} permanent={permanent}")
+    print(f"[4] host={hostname} op=sysctl status={'OK' if result.exit_code == 0 else 'FAILED'}")
+ """
+
 def copy_module(src, dest, backup, ssh_client):
     command = f'sudo cp -r {"--backup" if backup else ""} {src} {dest}'
     run_remote_cmd(command, ssh_client)
@@ -34,7 +42,7 @@ def apt_package_management(package_name, desired_state, ssh_client):
         print("Invalid desired_state value")
         return
 
-    result = run_remote_cmd(command, ssh_client)
+    run_remote_cmd(command, ssh_client)
 
 
 def service_management(service_name, desired_state, ssh_client):
@@ -145,6 +153,12 @@ def execute_playbook(playbook_file, inventory_file):
                         backup = module_args.get('backup', False)
                         copy_module(src, dest, backup, ssh_client) 
                         logging.info(f"[3] host={hostname} op=copy src={src} dest={dest} backup={backup}")
+                    elif module_name == 'sysctl':
+                        attribute = module_args.get('attribute')
+                        value = module_args.get('value')
+                        permanent = module_args.get('permanent', False)
+                        sysctl_module(attribute, value, permanent, ssh_client)
+                        logging.info(f"[4] host={hostname} op=sysctl attribute={attribute} value={value} permanent={permanent}")
                     else:
                         pass
 
