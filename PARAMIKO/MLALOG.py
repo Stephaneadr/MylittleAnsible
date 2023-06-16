@@ -16,28 +16,26 @@ class CmdResult:
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 
-""" def connect_to_host(hostname, username):
-    client = paramiko.SSHClient()
-    client.load_system_host_keys()
-    client.connect(hostname, username=username)
-    return client """
 
 def command_module(command, shell, ssh_client):
     logger = logging.getLogger(__name__)
-    hostname = transport.getpeername()[0]
+    hostname = ssh_client.get_transport().getpeername()[0]
     if shell is None:
         shell = '/bin/bash'
+        command =f'{command}'
     result = run_remote_cmd(command, ssh_client)
-    transport = ssh_client.get_transport()
-    print(f"[5] host={hostname} op=command status={'OK' if result.exit_code == 0 else 'ko'}")
-    logger.error(f"{result.stderr}")
+    if result.stderr == False :
+        logger.error(f"{result.stderr}")
+    else:
+        logging.info(f"[5] host={hostname} op=command status={'OK' if result.exit_code == 0 else 'ko'}")
+        logger.info(f"[5] host={hostname} - resultat : {result.stdout}")
 
 
 def sysctl_module(attribute, value, permanent, ssh_client):
     logger = logging.getLogger(__name__)
     hostname = ssh_client.get_transport().getpeername()[0]
 
-    # Effectue la commande définie selon 
+    # Effectue la commande définie selon la variable permanent
     if permanent == True :
         command = f'sudo sysctl -w {attribute}={value} >> /etc/sysctl.conf | sudo sysctl  --system '
     else:
@@ -45,9 +43,7 @@ def sysctl_module(attribute, value, permanent, ssh_client):
     result = run_remote_cmd(command, ssh_client)
     if result.stderr == False :
         logger.error(f"{result.stderr}")
-        pass
     else:
-        logger.info(f"[4] host={hostname} {result.stdout}")
         logging.info(f"[4] host={hostname} op=sysctl status={'OK' if result.exit_code == 0 else 'ko'}")
         
 
@@ -157,7 +153,7 @@ def execute_playbook(playbook_file, inventory_file):
 
 
     # Collecter les informations sur les tâches et les hôtes
-    tasks_count = sum(len(playbook_task.get('tasks', [])) for playbook_task in playbook)
+    tasks_count = sum(len(playbook_task.get('params', [])) for playbook_task in playbook)
     hosts = [host['hostname'] for host in inventory['hosts']]
 
     def connect_to_host():

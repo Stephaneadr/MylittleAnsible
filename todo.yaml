@@ -25,4 +25,10 @@
     - sysctl:
         attribute: "net.ipv4.ip_forward"
         value: "0"
-        permanent: true
+
+- module: command
+  params:
+    - command:
+        command: |
+          echo "test" > /tmp/dummy-file
+          cat /tmp/dummy-file
