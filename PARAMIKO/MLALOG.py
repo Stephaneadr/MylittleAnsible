@@ -14,6 +14,8 @@ class CmdResult:
         self.exit_code = exit_code
 
 
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+
 """ def connect_to_host(hostname, username):
     client = paramiko.SSHClient()
     client.load_system_host_keys()
@@ -21,26 +23,42 @@ class CmdResult:
     return client """
 
 def command_module(command, shell, ssh_client):
+    logger = logging.getLogger(__name__)
+    hostname = transport.getpeername()[0]
     if shell is None:
         shell = '/bin/bash'
-    full_command = f'sudo {shell} -c "{command}"'
-    run_remote_cmd(full_command, ssh_client)
+    result = run_remote_cmd(command, ssh_client)
+    transport = ssh_client.get_transport()
+    print(f"[5] host={hostname} op=command status={'OK' if result.exit_code == 0 else 'ko'}")
+    logger.error(f"{result.stderr}")
 
 
 def sysctl_module(attribute, value, permanent, ssh_client):
-    command = f'sudo sysctl -w {"--permanent" if permanent else ""} {attribute}={value}'
-    run_remote_cmd(command, ssh_client)
-    """ hostname = ssh_client.get_transport().getpeername()[0]
-    print(f"[4] host={hostname} op=sysctl attribute={attribute} value={value} permanent={permanent}")
-    print(f"[4] host={hostname} op=sysctl status={'OK' if result.exit_code == 0 else 'FAILED'}")
- """
+    logger = logging.getLogger(__name__)
+    hostname = ssh_client.get_transport().getpeername()[0]
+
+    # Effectue la commande définie selon 
+    if permanent == True :
+        command = f'sudo sysctl -w {attribute}={value} >> /etc/sysctl.conf | sudo sysctl  --system '
+    else:
+        command = f'sudo sysctl -w {attribute}={value}'
+    result = run_remote_cmd(command, ssh_client)
+    if result.stderr == False :
+        logger.error(f"{result.stderr}")
+        pass
+    else:
+        logger.info(f"[4] host={hostname} {result.stdout}")
+        logging.info(f"[4] host={hostname} op=sysctl status={'OK' if result.exit_code == 0 else 'ko'}")
+        
+
 
 def copy_module(src, dest, backup, ssh_client):
+    logger = logging.getLogger(__name__)
     hostname = ssh_client.get_transport().getpeername()[0]
 
     # Vérifier si le fichier source existe localement
     if not os.path.exists(src):
-        print(f"[3] host={hostname} op=copy src={src} status=FAILED (Source file not found)")
+        logger.error(f"[3] host={hostname} op=copy src={src} status=ko (Source file not found)")
         return
     
     # Vérifier si la destination est un dossier existant sur l'hôte distant
@@ -53,13 +71,13 @@ def copy_module(src, dest, backup, ssh_client):
                 # Effectuer une sauvegarde du fichier/dossier existant
                 backup_path = f"{dest}.bak"
                 sftp.rename(dest, backup_path)
-                print(f"[3] host={hostname} op=copy src={src} dest={dest} backup={backup} status=CHANGED (Backup created: {backup_path})")
+                logger.warning(f"[3] host={hostname} op=copy src={src} dest={dest} backup={backup} status=CHANGED (Backup created: {backup_path})")
             else:
-                print(f"[3] host={hostname} op=copy src={src} dest={dest} backup={backup} status=FAILED (Destination already exists)")
+                logger.error(f"[3] host={hostname} op=copy src={src} dest={dest} backup={backup} status=ko (Destination already exists)")
                 sftp.close()
                 return
     except FileNotFoundError:
-        print(f"[3] host={hostname} op=copy src={src} dest={dest} status=FAILED (Destination directory not found)")
+        logger.info(f"[3] host={hostname} op=copy src={src} dest={dest} status=ko (Destination directory not found)")
         sftp.close()
         return
     
@@ -69,8 +87,7 @@ def copy_module(src, dest, backup, ssh_client):
     
     sftp.put(src, dest_path)
     sftp.close()
-    print(f"[3] host={hostname} op=copy src={src} dest={dest} backup={backup} status=CHANGED")
-
+    logging.warning(f"[3] host={hostname} op=copy src={src} dest={dest} backup={backup} status=CHANGED")
 
 def render(playbook):
     template_params = playbook['module']['params']
@@ -87,10 +104,8 @@ def render(playbook):
 def apt_package_management(package_name, desired_state, ssh_client):
     if desired_state == 'present':
         command = f'sudo apt-get install -y {package_name}'
-        action = 'Install'
     elif desired_state == 'absent':
         command = f'sudo apt-get remove -y {package_name}'
-        action = 'Remove'
     else:
         print("Invalid desired_state value")
         return
@@ -99,9 +114,13 @@ def apt_package_management(package_name, desired_state, ssh_client):
 
 
 def service_management(service_name, desired_state, ssh_client):
-    if desired_state in ['start', 'restart', 'stop']:
-        command = f'sudo systemctl {desired_state} {service_name}'
-        action = 'Manage'
+    if desired_state in ['started', 'restarted', 'stopped']:
+        if desired_state == 'started' : 
+            command = f'sudo systemctl start {service_name}'
+        elif desired_state == 'restarted' : 
+            command = f'sudo systemctl restart {service_name}'
+        else: 
+            command = f'sudo systemctl stop {service_name}'
     elif desired_state in ['enabled', 'disabled']:
         if desired_state == 'enabled':
             command = f'sudo systemctl enable {service_name}'
@@ -135,30 +154,18 @@ def execute_playbook(playbook_file, inventory_file):
     with open(inventory_file, 'r') as file:
         inventory = yaml.safe_load(file)
 
-    logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 
 
     # Collecter les informations sur les tâches et les hôtes
     tasks_count = sum(len(playbook_task.get('tasks', [])) for playbook_task in playbook)
     hosts = [host['hostname'] for host in inventory['hosts']]
 
-    choice = input ("choisi t'a méthode de connexion :\n 1 - Username/Password\n 2 - Key-file\n")
-    
-    def connect_to_host(choice):
+    def connect_to_host():
         client = paramiko.SSHClient()
-        if choice == "1":
-            client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-            client.connect(hostname, username=username, password=password)
-            return client
-        elif choice == "2":
-            key_file = paramiko.Ed25519Key.from_private_key_file("/home/stef/.ssh/id_ed25519")
-            client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-            client.connect(hostname, username=username,pkey=key_file, allow_agent=False, look_for_keys=False)
-            return client
-        else :
-            client.load_system_host_keys() # Première méthode know_host
-            client.connect(hostname, username=username)
-            return client
+        client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        client.connect(hostname, username=username, password=password)
+        return client
+
 
 
     logging.info(f"processing {tasks_count} tasks on hosts: {', '.join(hosts)}")
@@ -167,6 +174,7 @@ def execute_playbook(playbook_file, inventory_file):
     for playbook_task in playbook:
         hosts = playbook_task.get('hosts')
         params = playbook_task.get('params')
+        modules = playbook_task.get('module')
 
         # Parcourir les hôtes spécifiés dans le playbook
         for host in inventory['hosts']:
@@ -176,7 +184,7 @@ def execute_playbook(playbook_file, inventory_file):
 
 
             # Se connecter à l'hôte distant
-            ssh_client = connect_to_host(choice)
+            ssh_client = connect_to_host()
             logging.info(f"Connexion réussie à l'hôte : {hostname}")
 
             # Vérifier si des tâches sont définies
@@ -187,41 +195,39 @@ def execute_playbook(playbook_file, inventory_file):
                     module_args = param.get(module)
 
                     # Exécuter l'action correspondante en fonction du module
-                    if module == 'apt':
+                    if modules == 'apt':
                         package_name = module_args.get('name')
                         desired_state = module_args.get('state')
                         apt_package_management(package_name, desired_state, ssh_client)
-                        logging.info(f"[1] host={hostname} op=apt status='OK'")
-                    elif module == 'service':
+                        logging.info(f"[1] host={hostname} op=apt name={package_name} state={desired_state}")
+                    elif modules == 'service':
                         service_name = module_args.get('name')
                         desired_state = module_args.get('state')
                         service_management(service_name, desired_state, ssh_client)
                         logging.info(f"[2] host={hostname} op=service name={service_name} state={desired_state}")
-                    elif module == 'copy':
+                    elif modules == 'copy':
                         src = module_args.get('src')
                         dest = module_args.get('dest')
                         backup = module_args.get('backup', False)
                         copy_module(src, dest, backup, ssh_client) 
                         logging.info(f"[3] host={hostname} op=copy src={src} dest={dest} backup={backup}")
-                    elif module == 'sysctl':
+                    elif modules == 'sysctl':
                         attribute = module_args.get('attribute')
                         value = module_args.get('value')
                         permanent = module_args.get('permanent', False)
                         sysctl_module(attribute, value, permanent, ssh_client)
                         logging.info(f"[4] host={hostname} op=sysctl attribute={attribute} value={value} permanent={permanent}")
-                    elif module == 'command':
+                    elif modules == 'command':
                         command = module_args.get('command')
                         shell = module_args.get('shell', '/bin/bash')
                         command_module(command, shell, ssh_client)
                         logging.info(f"[5] host={hostname} op=command command={command} shell={shell}")
-                        logging.info(f"[5] host={hostname} op=command status='OK'")
                     else:
                         pass
 
             # Fermer la connexion SSH
-
             ssh_client.close()
-        
+
         logging.info(f"done processing tasks for hosts: {hostname}")
 
 

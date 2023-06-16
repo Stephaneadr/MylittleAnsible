@@ -10,7 +10,7 @@
   params:
     - service_status:
         name: apache2
-        state: "stop"  # Remplacez par l'état souhaité (started, restarted, stopped, enabled, disabled)
+        state: "stopped"  # Remplacez par l'état souhaité (started, restarted, stopped, enabled, disabled)
 
 - module: copy
   hosts: all
@@ -18,3 +18,11 @@
     - copy:
         src: "./test"
         dest: "rep/"
+        # Ajouter la valeur backup si besoin(backup: true)
+
+- module: sysctl
+  params:
+    - sysctl:
+        attribute: "net.ipv4.ip_forward"
+        value: "0"
+        permanent: true
