@@ -1,0 +1,4 @@
+PyYAML
+click
+jinja2
+paramiko

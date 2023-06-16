@@ -1,0 +1,7 @@
+setup.py
+MLA_haggag_Andre.egg-info/PKG-INFO
+MLA_haggag_Andre.egg-info/SOURCES.txt
+MLA_haggag_Andre.egg-info/dependency_links.txt
+MLA_haggag_Andre.egg-info/entry_points.txt
+MLA_haggag_Andre.egg-info/requires.txt
+MLA_haggag_Andre.egg-info/top_level.txt

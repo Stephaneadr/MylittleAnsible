@@ -1,6 +1,5 @@
 import paramiko
 import logging
-from getpass import getpass
 import click
 import yaml
 from paramiko import SSHClient
@@ -17,6 +16,8 @@ class CmdResult:
 
 logging.basicConfig(level=logging.INFO,
                     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+
+
 
 
 def command_module(command, shell, ssh_client):
