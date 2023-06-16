@@ -36,10 +36,6 @@ def sysctl_module(attribute, value, permanent, ssh_client):
  """
 
 def copy_module(src, dest, backup, ssh_client):
-    command = f'sudo cp -r {"--backup=numbered" if backup else ""} {src} {dest}'
-    run_remote_cmd(command, ssh_client)
-
-def copy_module_test(src, dest, backup, ssh_client):
     hostname = ssh_client.get_transport().getpeername()[0]
 
     # Vérifier si le fichier source existe localement
@@ -100,34 +96,6 @@ def apt_package_management(package_name, desired_state, ssh_client):
         return
 
     run_remote_cmd(command, ssh_client)
-
-
-""" def copy_sftp_recursive(source, destination, sftp):
-    try:
-        sftp.mkdir(destination)
-    except IOError as e:
-        # Ignorer les erreurs si le dossier existe déjà
-        if "File already exists" not in str(e):
-            raise
-    for item in sftp.listdir_attr(source):
-        item_path = source + '/' + item.filename
-        if os.path.isfile(item_path):
-            sftp.put(item_path, destination + '/' + item.filename)
-        else:
-            sub_destination = destination + '/' + item.filename
-            sftp.mkdir(sub_destination)
-            copy_sftp_recursive(item_path, sub_destination)
-
-def copy_sftp(source_dir, destination_dir, ssh_client):
-
-    # Créer une session SFTP
-    sftp = ssh_client.open_sftp()
-    
-    # Appeler la fonction récursive pour copier le dossier et les sous-dossiers
-    copy_sftp_recursive(source_dir, destination_dir, sftp)
-
-    # Fermer la session SFTP et la connexion SSH
-    sftp.close() """
 
 
 def service_management(service_name, desired_state, ssh_client):
@@ -233,7 +201,7 @@ def execute_playbook(playbook_file, inventory_file):
                         src = module_args.get('src')
                         dest = module_args.get('dest')
                         backup = module_args.get('backup', False)
-                        copy_module_test(src, dest, backup, ssh_client) 
+                        copy_module(src, dest, backup, ssh_client) 
                         logging.info(f"[3] host={hostname} op=copy src={src} dest={dest} backup={backup}")
                     elif module == 'sysctl':
                         attribute = module_args.get('attribute')
