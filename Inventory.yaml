@@ -1,7 +1,9 @@
 hosts:
   - name: Worker
     hostname: 192.168.1.21
-    username: stef
+    username: root
+    password: Password
   - name: Worker2
     hostname: 192.168.1.26
-    username: stef
+    username: root
+    password: Password

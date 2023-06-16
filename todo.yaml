@@ -17,13 +17,4 @@
   params:
     - copy:
         src: "./test"
-        dest: "./rep/"
-        backup: true
-
-- module : command
-  hosts : all
-  params:
-    - command:
-      command:
-        echo "test" > /tmp/dummy-file |
-        cat /tmp/dummy-file
+        dest: "rep/"

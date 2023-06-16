@@ -39,6 +39,43 @@ def copy_module(src, dest, backup, ssh_client):
     command = f'sudo cp -r {"--backup=numbered" if backup else ""} {src} {dest}'
     run_remote_cmd(command, ssh_client)
 
+def copy_module_test(src, dest, backup, ssh_client):
+    hostname = ssh_client.get_transport().getpeername()[0]
+
+    # Vérifier si le fichier source existe localement
+    if not os.path.exists(src):
+        print(f"[3] host={hostname} op=copy src={src} status=FAILED (Source file not found)")
+        return
+    
+    # Vérifier si la destination est un dossier existant sur l'hôte distant
+    sftp = ssh_client.open_sftp()
+    try:
+        parent_dir, dest_name = os.path.split(dest)
+        dir_items = sftp.listdir(parent_dir)
+        if dest_name in dir_items:
+            if backup:
+                # Effectuer une sauvegarde du fichier/dossier existant
+                backup_path = f"{dest}.bak"
+                sftp.rename(dest, backup_path)
+                print(f"[3] host={hostname} op=copy src={src} dest={dest} backup={backup} status=CHANGED (Backup created: {backup_path})")
+            else:
+                print(f"[3] host={hostname} op=copy src={src} dest={dest} backup={backup} status=FAILED (Destination already exists)")
+                sftp.close()
+                return
+    except FileNotFoundError:
+        print(f"[3] host={hostname} op=copy src={src} dest={dest} status=FAILED (Destination directory not found)")
+        sftp.close()
+        return
+    
+    # Construire le chemin de destination complet
+    dest_path = os.path.join(dest, os.path.basename(src))
+    # Copier le fichier/dossier de la machine locale vers l'hôte distant
+    
+    sftp.put(src, dest_path)
+    sftp.close()
+    print(f"[3] host={hostname} op=copy src={src} dest={dest} backup={backup} status=CHANGED")
+
+
 def render(playbook):
     template_params = playbook['module']['params']
     src_template = template_params['src']
@@ -65,7 +102,7 @@ def apt_package_management(package_name, desired_state, ssh_client):
     run_remote_cmd(command, ssh_client)
 
 
-def copy_sftp_recursive(source, destination, sftp):
+""" def copy_sftp_recursive(source, destination, sftp):
     try:
         sftp.mkdir(destination)
     except IOError as e:
@@ -81,7 +118,7 @@ def copy_sftp_recursive(source, destination, sftp):
             sftp.mkdir(sub_destination)
             copy_sftp_recursive(item_path, sub_destination)
 
-def copy_sftp( source_dir, destination_dir, ssh_client):
+def copy_sftp(source_dir, destination_dir, ssh_client):
 
     # Créer une session SFTP
     sftp = ssh_client.open_sftp()
@@ -90,7 +127,7 @@ def copy_sftp( source_dir, destination_dir, ssh_client):
     copy_sftp_recursive(source_dir, destination_dir, sftp)
 
     # Fermer la session SFTP et la connexion SSH
-    sftp.close()
+    sftp.close() """
 
 
 def service_management(service_name, desired_state, ssh_client):
@@ -142,7 +179,6 @@ def execute_playbook(playbook_file, inventory_file):
     def connect_to_host(choice):
         client = paramiko.SSHClient()
         if choice == "1":
-            password = getpass('enter your password :')
             client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
             client.connect(hostname, username=username, password=password)
             return client
@@ -161,15 +197,14 @@ def execute_playbook(playbook_file, inventory_file):
 
     # Parcourir les playbooks dans le fichier de playbook
     for playbook_task in playbook:
-        name = playbook_task.get('name')
         hosts = playbook_task.get('hosts')
-        params = playbook_task.get('param')
-        modules = playbook_task.get('module')
+        params = playbook_task.get('params')
 
         # Parcourir les hôtes spécifiés dans le playbook
         for host in inventory['hosts']:
             hostname = host['hostname']
             username = host['username']
+            password = host['password']
 
 
             # Se connecter à l'hôte distant
@@ -177,9 +212,9 @@ def execute_playbook(playbook_file, inventory_file):
             logging.info(f"Connexion réussie à l'hôte : {hostname}")
 
             # Vérifier si des tâches sont définies
-            if modules:
+            if params:
                 # Parcourir les tâches du playbook
-                for module in modules:
+                for param in params:
                     module = next(iter(param.keys()))  # Récupérer le nom du module
                     module_args = param.get(module)
 
@@ -198,7 +233,7 @@ def execute_playbook(playbook_file, inventory_file):
                         src = module_args.get('src')
                         dest = module_args.get('dest')
                         backup = module_args.get('backup', False)
-                        copy_module(src, dest, backup, ssh_client) 
+                        copy_module_test(src, dest, backup, ssh_client) 
                         logging.info(f"[3] host={hostname} op=copy src={src} dest={dest} backup={backup}")
                     elif module == 'sysctl':
                         attribute = module_args.get('attribute')
