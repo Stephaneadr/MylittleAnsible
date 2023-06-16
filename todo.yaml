@@ -1,18 +1,18 @@
-- module: APT
+- module: apt
   hosts: all
   params:
-    - apt_package:
+    - apt:
         name: apache2
         state: "present"  # Remplacez par "absent" pour désinstaller le paquet
 
-- module: Service
+- module: service
   hosts: all
   params:
     - service_status:
         name: apache2
         state: "stop"  # Remplacez par l'état souhaité (started, restarted, stopped, enabled, disabled)
 
-- module: Copy
+- module: copy
   hosts: all
   params:
     - copy:
@@ -23,7 +23,7 @@
 - module : command
   hosts : all
   params:
-    - command_module:
-      command: |
-        echo "test" > /tmp/dummy-file
+    - command:
+      command:
+        echo "test" > /tmp/dummy-file |
         cat /tmp/dummy-file

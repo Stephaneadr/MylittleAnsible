@@ -20,25 +20,6 @@ class CmdResult:
     client.connect(hostname, username=username)
     return client """
 
-choice = input ("choisi t'a méthode de connexion :\n 1 - Username/Password\n 2 - Key-file\n")
-    
-def connect_to_host(hostname, username):
-    client = paramiko.SSHClient()
-    if choice == "1":
-        password = getpass('enter your password :')
-        client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        client.connect(hostname, username=username, password=password)
-        return client
-    elif choice == "2":
-        key_file = paramiko.Ed25519Key.from_private_key_file("/home/stef/.ssh/id_ed25519")
-        client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        client.connect(hostname, username=username,pkey=key_file, allow_agent=False, look_for_keys=False)
-        return client
-    else :
-        client.load_system_host_keys() # Première méthode know_host
-        client.connect(hostname, username=username)
-        return client
-
 def command_module(command, shell, ssh_client):
     if shell is None:
         shell = '/bin/bash'
@@ -156,6 +137,25 @@ def execute_playbook(playbook_file, inventory_file):
     tasks_count = sum(len(playbook_task.get('tasks', [])) for playbook_task in playbook)
     hosts = [host['hostname'] for host in inventory['hosts']]
 
+    choice = input ("choisi t'a méthode de connexion :\n 1 - Username/Password\n 2 - Key-file\n")
+    
+    def connect_to_host(choice):
+        client = paramiko.SSHClient()
+        if choice == "1":
+            password = getpass('enter your password :')
+            client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+            client.connect(hostname, username=username, password=password)
+            return client
+        elif choice == "2":
+            key_file = paramiko.Ed25519Key.from_private_key_file("/home/stef/.ssh/id_ed25519")
+            client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+            client.connect(hostname, username=username,pkey=key_file, allow_agent=False, look_for_keys=False)
+            return client
+        else :
+            client.load_system_host_keys() # Première méthode know_host
+            client.connect(hostname, username=username)
+            return client
+
 
     logging.info(f"processing {tasks_count} tasks on hosts: {', '.join(hosts)}")
 
@@ -163,7 +163,8 @@ def execute_playbook(playbook_file, inventory_file):
     for playbook_task in playbook:
         name = playbook_task.get('name')
         hosts = playbook_task.get('hosts')
-        params = playbook_task.get('params')
+        params = playbook_task.get('param')
+        modules = playbook_task.get('module')
 
         # Parcourir les hôtes spécifiés dans le playbook
         for host in inventory['hosts']:
@@ -176,19 +177,19 @@ def execute_playbook(playbook_file, inventory_file):
             logging.info(f"Connexion réussie à l'hôte : {hostname}")
 
             # Vérifier si des tâches sont définies
-            if params:
+            if modules:
                 # Parcourir les tâches du playbook
-                for param in params:
+                for module in modules:
                     module = next(iter(param.keys()))  # Récupérer le nom du module
                     module_args = param.get(module)
 
                     # Exécuter l'action correspondante en fonction du module
-                    if module == 'apt_package':
+                    if module == 'apt':
                         package_name = module_args.get('name')
                         desired_state = module_args.get('state')
                         apt_package_management(package_name, desired_state, ssh_client)
                         logging.info(f"[1] host={hostname} op=apt status='OK'")
-                    elif module == 'service_status':
+                    elif module == 'service':
                         service_name = module_args.get('name')
                         desired_state = module_args.get('state')
                         service_management(service_name, desired_state, ssh_client)
