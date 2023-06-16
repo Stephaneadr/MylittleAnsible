@@ -25,6 +25,7 @@
     - sysctl:
         attribute: "net.ipv4.ip_forward"
         value: "0"
+        # Ajouter la valeur permanent si besoin(permanent: true)
 
 - module: command
   params:
