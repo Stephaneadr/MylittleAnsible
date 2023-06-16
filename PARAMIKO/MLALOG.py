@@ -19,6 +19,17 @@ class CmdResult:
     client.connect(hostname, username=username)
     return client """
 
+def command_module(command, shell, ssh_client):
+    if shell is None:
+        shell = '/bin/bash'
+    full_command = f'sudo {shell} -c "{command}"'
+    result = run_remote_cmd(full_command, ssh_client)
+    hostname = ssh_client.get_transport().getpeername()[0]
+    print(f"[4] host={hostname} op=command status={'OK' if result.exit_code == 0 else 'FAILED'}")
+    print(f"stdout:\n{result.stdout}")
+    print(f"stderr:\n{result.stderr}")
+
+
 def sysctl_module(attribute, value, permanent, ssh_client):
     command = f'sudo sysctl -w {"--permanent" if permanent else ""} {attribute}={value}'
     run_remote_cmd(command, ssh_client)
@@ -171,8 +182,12 @@ def execute_playbook(playbook_file, inventory_file):
                         permanent = module_args.get('permanent', False)
                         sysctl_module(attribute, value, permanent, ssh_client)
                         logging.info(f"[4] host={hostname} op=sysctl attribute={attribute} value={value} permanent={permanent}")
-
-                    
+                    elif module_name == 'command':
+                        command = module_args.get('command')
+                        shell = module_args.get('shell', '/bin/bash')
+                        command_module(command, shell, ssh_client)
+                        logging.info(f"[5] host={hostname} op=command command={command} shell={shell}")
+                        logging.info(f"[5] host={hostname} op=command status={'OK' if result.exit_code == 0 else 'FAILED'}")
                     else:
                         pass
 
