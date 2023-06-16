@@ -5,6 +5,7 @@ import click
 import yaml
 from paramiko import SSHClient
 from jinja2 import Environment, FileSystemLoader
+import os
 
 class CmdResult:
     def __init__(self, stdout: str, stderr: str, exit_code: int):
@@ -19,15 +20,30 @@ class CmdResult:
     client.connect(hostname, username=username)
     return client """
 
+choice = input ("choisi t'a méthode de connexion :\n 1 - Username/Password\n 2 - Key-file\n")
+    
+def connect_to_host(hostname, username):
+    client = paramiko.SSHClient()
+    if choice == "1":
+        password = getpass('enter your password :')
+        client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        client.connect(hostname, username=username, password=password)
+        return client
+    elif choice == "2":
+        key_file = paramiko.Ed25519Key.from_private_key_file("/home/stef/.ssh/id_ed25519")
+        client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        client.connect(hostname, username=username,pkey=key_file, allow_agent=False, look_for_keys=False)
+        return client
+    else :
+        client.load_system_host_keys() # Première méthode know_host
+        client.connect(hostname, username=username)
+        return client
+
 def command_module(command, shell, ssh_client):
     if shell is None:
         shell = '/bin/bash'
     full_command = f'sudo {shell} -c "{command}"'
-    result = run_remote_cmd(full_command, ssh_client)
-    hostname = ssh_client.get_transport().getpeername()[0]
-    print(f"[4] host={hostname} op=command status={'OK' if result.exit_code == 0 else 'FAILED'}")
-    print(f"stdout:\n{result.stdout}")
-    print(f"stderr:\n{result.stderr}")
+    run_remote_cmd(full_command, ssh_client)
 
 
 def sysctl_module(attribute, value, permanent, ssh_client):
@@ -68,6 +84,34 @@ def apt_package_management(package_name, desired_state, ssh_client):
     run_remote_cmd(command, ssh_client)
 
 
+def copy_sftp_recursive(source, destination, sftp):
+    try:
+        sftp.mkdir(destination)
+    except IOError as e:
+        # Ignorer les erreurs si le dossier existe déjà
+        if "File already exists" not in str(e):
+            raise
+    for item in sftp.listdir_attr(source):
+        item_path = source + '/' + item.filename
+        if os.path.isfile(item_path):
+            sftp.put(item_path, destination + '/' + item.filename)
+        else:
+            sub_destination = destination + '/' + item.filename
+            sftp.mkdir(sub_destination)
+            copy_sftp_recursive(item_path, sub_destination)
+
+def copy_sftp( source_dir, destination_dir, ssh_client):
+
+    # Créer une session SFTP
+    sftp = ssh_client.open_sftp()
+    
+    # Appeler la fonction récursive pour copier le dossier et les sous-dossiers
+    copy_sftp_recursive(source_dir, destination_dir, sftp)
+
+    # Fermer la session SFTP et la connexion SSH
+    sftp.close()
+
+
 def service_management(service_name, desired_state, ssh_client):
     if desired_state in ['start', 'restart', 'stop']:
         command = f'sudo systemctl {desired_state} {service_name}'
@@ -75,15 +119,13 @@ def service_management(service_name, desired_state, ssh_client):
     elif desired_state in ['enabled', 'disabled']:
         if desired_state == 'enabled':
             command = f'sudo systemctl enable {service_name}'
-            action = 'Enable'
         else:
             command = f'sudo systemctl disable {service_name}'
-            action = 'Disable'
     else:
         print("Invalid desired_state value")
         return
 
-    result = run_remote_cmd(command, ssh_client)
+    run_remote_cmd(command, ssh_client)
 
 
 def run_remote_cmd(command: str, ssh_client: SSHClient) -> CmdResult:
@@ -114,25 +156,6 @@ def execute_playbook(playbook_file, inventory_file):
     tasks_count = sum(len(playbook_task.get('tasks', [])) for playbook_task in playbook)
     hosts = [host['hostname'] for host in inventory['hosts']]
 
-    choice = input ("choisi t'a méthode de connexion :\n 1 - Username/Password\n 2 - Key-file\n")
-    
-    def connect_to_host(choice):
-        client = paramiko.SSHClient()
-        if choice == "1":
-            password = getpass('enter your password :')
-            client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-            client.connect(hostname, username=username, password=password)
-            return client
-        elif choice == "2":
-            key_file = paramiko.Ed25519Key.from_private_key_file("/home/stef/.ssh/id_ed25519")
-            client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-            client.connect(hostname, username=username,pkey=key_file, allow_agent=False, look_for_keys=False)
-            return client
-        else :
-            client.load_system_host_keys() # Première méthode know_host
-            client.connect(hostname, username=username)
-            return client
-
 
     logging.info(f"processing {tasks_count} tasks on hosts: {', '.join(hosts)}")
 
@@ -140,7 +163,7 @@ def execute_playbook(playbook_file, inventory_file):
     for playbook_task in playbook:
         name = playbook_task.get('name')
         hosts = playbook_task.get('hosts')
-        tasks = playbook_task.get('tasks')
+        params = playbook_task.get('params')
 
         # Parcourir les hôtes spécifiés dans le playbook
         for host in inventory['hosts']:
@@ -153,41 +176,41 @@ def execute_playbook(playbook_file, inventory_file):
             logging.info(f"Connexion réussie à l'hôte : {hostname}")
 
             # Vérifier si des tâches sont définies
-            if tasks:
+            if params:
                 # Parcourir les tâches du playbook
-                for task in tasks:
-                    module_name = next(iter(task.keys()))  # Récupérer le nom du module
-                    module_args = task.get(module_name)
+                for param in params:
+                    module = next(iter(param.keys()))  # Récupérer le nom du module
+                    module_args = param.get(module)
 
                     # Exécuter l'action correspondante en fonction du module
-                    if module_name == 'apt_package':
+                    if module == 'apt_package':
                         package_name = module_args.get('name')
                         desired_state = module_args.get('state')
                         apt_package_management(package_name, desired_state, ssh_client)
                         logging.info(f"[1] host={hostname} op=apt status='OK'")
-                    elif module_name == 'service_status':
+                    elif module == 'service_status':
                         service_name = module_args.get('name')
                         desired_state = module_args.get('state')
                         service_management(service_name, desired_state, ssh_client)
                         logging.info(f"[2] host={hostname} op=service name={service_name} state={desired_state}")
-                    elif module_name == 'copy':
+                    elif module == 'copy':
                         src = module_args.get('src')
                         dest = module_args.get('dest')
                         backup = module_args.get('backup', False)
                         copy_module(src, dest, backup, ssh_client) 
                         logging.info(f"[3] host={hostname} op=copy src={src} dest={dest} backup={backup}")
-                    elif module_name == 'sysctl':
+                    elif module == 'sysctl':
                         attribute = module_args.get('attribute')
                         value = module_args.get('value')
                         permanent = module_args.get('permanent', False)
                         sysctl_module(attribute, value, permanent, ssh_client)
                         logging.info(f"[4] host={hostname} op=sysctl attribute={attribute} value={value} permanent={permanent}")
-                    elif module_name == 'command':
+                    elif module == 'command':
                         command = module_args.get('command')
                         shell = module_args.get('shell', '/bin/bash')
                         command_module(command, shell, ssh_client)
                         logging.info(f"[5] host={hostname} op=command command={command} shell={shell}")
-                        logging.info(f"[5] host={hostname} op=command status={'OK' if result.exit_code == 0 else 'FAILED'}")
+                        logging.info(f"[5] host={hostname} op=command status='OK'")
                     else:
                         pass
 

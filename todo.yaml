@@ -1,43 +1,29 @@
-- name: APT
+- module: APT
   hosts: all
-  tasks:
+  params:
     - apt_package:
         name: apache2
         state: "present"  # Remplacez par "absent" pour désinstaller le paquet
 
-- name: Service
+- module: Service
   hosts: all
-  tasks:
+  params:
     - service_status:
         name: apache2
-        state: "start"  # Remplacez par l'état souhaité (started, restarted, stopped, enabled, disabled)
+        state: "stop"  # Remplacez par l'état souhaité (started, restarted, stopped, enabled, disabled)
 
-- name: Copy
+- module: Copy
   hosts: all
-  tasks:
-  - copy:
-      src: "./test"
-      dest: "./rep/"
-      backup: true
+  params:
+    - copy:
+        src: "./test"
+        dest: "./rep/"
+        backup: true
 
-- name: Sysctl
-  hosts: all
-  tasks:
-  - sysctl:
-    attribute: "net.ipv4.ip_forward"
-    value: 1
-
-name: template
-tasks:
-  src: "default.conf.j2"
-  dest: "/etc/nginx/sites-enabled/default"
-  vars:
-    listen_port: 8000
-    servername: ""
-
-- module: command
+- module : command
   hosts : all
-  tasks:
-    command: |
-      echo "test" > /tmp/dummy-file
-      cat /tmp/dummy-file
+  params:
+    - command_module:
+      command: |
+        echo "test" > /tmp/dummy-file
+        cat /tmp/dummy-file
