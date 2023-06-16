@@ -21,12 +21,38 @@ def connect_to_host(hostname, username):
     client.connect(hostname, username=username)
     return client
 
-def copy(source_dir, destination_dir, ssh_client):
-    client = connect_to_host(hostname, username)
-    scp = client.open_sft()
-    scp.put(source_dir, destination_dir, recursive=True)
-    scp.close()
-    client.close()
+
+def copy_sftp_recursive(source, destination, sftp):
+    try:
+        sftp.mkdir(destination)
+    except IOError as e:
+        # Ignorer les erreurs si le dossier existe déjà
+        if "File already exists" not in str(e):
+            raise
+    for item in sftp.listdir_attr(source):
+        item_path = source + '/' + item.filename
+        if os.path.isfile(item_path):
+            sftp.put(item_path, destination + '/' + item.filename)
+        else:
+            sub_destination = destination + '/' + item.filename
+            sftp.mkdir(sub_destination)
+            copy_sftp_recursive(item_path, sub_destination)
+
+def copy_sftp(hostname, username, password, source_dir, destination_dir, ssh_client):
+    # Établir une connexion SSH
+    ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+    ssh_client.connect(hostname, username=username, password=password)
+
+    # Créer une session SFTP
+    sftp = ssh_client.open_sftp()
+    
+    # Appeler la fonction récursive pour copier le dossier et les sous-dossiers
+    copy_sftp_recursive(source_dir, destination_dir, sftp)
+
+    # Fermer la session SFTP et la connexion SSH
+    sftp.close()
+    ssh_client.close()
+
 
 
 def apt_package_management(package_name, desired_state, ssh_client):
