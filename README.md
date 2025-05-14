@@ -22,13 +22,12 @@ Il est structuré autour de fichiers d'inventaire, de tâches et de modules pers
    ```bash
    git clone https://github.com/Stephaneadr/MylittleAnsible.git
    cd MylittleAnsible
-```
-
+   ```
 2. Exécuter le playbook :
-```
-ansible-playbook -i inventory.yaml todo.yaml
-```
-
+   ```bash
+   ansible-playbook -i inventory.yaml todo.yaml
+   ```
+   
 ## 📄 Documentation
 
 La documentation des modules personnalisés est disponible dans le fichier `Documentation des modules.pdf`.  
